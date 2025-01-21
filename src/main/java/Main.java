@@ -1,11 +1,8 @@
 import okhttp3.*;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.SequenceInputStream;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
+import java.net.*;
+import java.util.Enumeration;
 
 /**
  * @author Mike_Chen
@@ -55,7 +52,7 @@ public class Main {
         }
         if(args.length==0) {
             while (true) {
-                String ipv6 = getComputerPublicIPV6();
+                String ipv6 = getPublicIPv6();
                 System.out.println(ipv6);
                 if(ipv6!=null) {
                     OkHttpClient client = new OkHttpClient();
@@ -86,16 +83,39 @@ public class Main {
         }
     }
 
-    public static String getComputerPublicIPV6() {
+    public static String getPublicIPv6() {
+        InetAddress inetAddress = null;
+        Enumeration<NetworkInterface> networkInterfaces;
         try {
-            for (InetAddress it : InetAddress.getAllByName(InetAddress.getLocalHost().getHostName())) {
-                if(it.getHostAddress().startsWith("2")) {
-                    return it.getHostAddress();
+            networkInterfaces = NetworkInterface.getNetworkInterfaces();
+        } catch (SocketException e) {
+            return null;
+        }
+        outer:
+        while(networkInterfaces.hasMoreElements()) {
+            Enumeration<InetAddress> inetAds = networkInterfaces.nextElement().getInetAddresses();
+            while(inetAds.hasMoreElements()) {
+                inetAddress = inetAds.nextElement();
+                //检查此地址是否是IPv6地址以及是否是保留地址以及是否是公网IP
+                if(inetAddress instanceof Inet6Address &&
+                        !isReservedAddr(inetAddress) &&
+                        inetAddress.getHostAddress().startsWith("2")) {
+                    break outer;
                 }
             }
-        } catch (UnknownHostException e) {
-            e.printStackTrace();
         }
-        return null;
+        if (inetAddress==null)
+            return null;
+        String ipAddr = inetAddress.getHostAddress();
+
+        //过滤网卡
+        int index = ipAddr.indexOf('%');
+        if(index>0)
+            ipAddr = ipAddr.substring(0, index);
+        return ipAddr;
+    }
+
+    private static boolean isReservedAddr(InetAddress inetAddr) {
+        return inetAddr.isAnyLocalAddress() || inetAddr.isLinkLocalAddress() || inetAddr.isLoopbackAddress();
     }
 }
